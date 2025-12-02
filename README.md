@@ -146,7 +146,70 @@ We're planning to evolve this project beyond a CLI tool with improved user exper
   - Preview images before downloading
   - Batch selection and filtering options
 
-- **Discord Bot** - Alternative deployment as a bot users can add to their servers
+- **Discord Bot** ✅ **NOW AVAILABLE!** - Alternative deployment as a bot users can add to their servers
   - Slash commands for downloading images
   - Direct integration within Discord
   - No need for users to manage tokens manually
+
+## Discord Bot
+
+The project now includes a Discord bot (`bot.py`) that provides the same image downloading functionality through slash commands!
+
+### Bot Setup
+
+1. **Create a Discord Bot**:
+   - Go to [Discord Developer Portal](https://discord.com/developers/applications)
+   - Click "New Application" and give it a name
+   - Go to the "Bot" section and click "Add Bot"
+   - Under "Privileged Gateway Intents", enable:
+     - Message Content Intent
+     - Server Members Intent (optional)
+   - Copy your bot token
+
+2. **Add BOT_TOKEN to .env**:
+   ```
+   BOT_TOKEN=your_bot_token_here
+   ```
+
+3. **Invite the bot to your server**:
+   - Go to the "OAuth2" → "URL Generator" section
+   - Select scopes: `bot` and `applications.commands`
+   - Select bot permissions:
+     - Read Messages/View Channels
+     - Read Message History
+     - Send Messages
+     - Attach Files
+   - Copy the generated URL and open it in your browser
+   - Select your server and authorize the bot
+
+4. **Run the bot**:
+   ```bash
+   python bot.py
+   ```
+
+### Bot Commands
+
+The bot provides a `/download` slash command with the following options:
+
+- `channel` (required): The channel to download images from
+- `limit` (optional): Number of messages to fetch (1-100, default: 50)
+- `before` (optional): Message ID to fetch messages before
+- `after` (optional): Message ID to fetch messages after
+- `around` (optional): Message ID to fetch messages around
+- `fetch_all` (optional): Fetch ALL messages using pagination
+
+**Examples:**
+```
+/download channel:#photos limit:50
+/download channel:#memes fetch_all:True
+/download channel:#archive before:123456789012345678 limit:100
+```
+
+**Bot Features:**
+- ✅ Downloads images directly to Discord (no need to access files locally)
+- ✅ Automatically creates zip files for large collections (>10 images)
+- ✅ Real-time progress updates
+- ✅ Built-in permission checking
+- ✅ User-friendly error messages
+- ✅ Supports all query parameters (before/after/around)
+- ✅ Full pagination support with `fetch_all` option
