@@ -126,7 +126,7 @@ class DiscordImageDownloader:
 
         while True:
             batch_count += 1
-            
+
             # Fetch batch of messages
             try:
                 url = f"{self.base_url}/channels/{channel_id}/messages"
@@ -143,13 +143,15 @@ class DiscordImageDownloader:
                     break
 
                 all_messages.extend(messages)
-                
+
                 # Count images in this batch for progress update
                 batch_images = self.get_image_attachments(messages)
                 total_images += len(batch_images)
-                
-                print(f"Batch {batch_count}: Retrieved {len(messages)} messages | "
-                      f"Total: {len(all_messages)} messages, {total_images} images found")
+
+                print(
+                    f"Batch {batch_count}: Retrieved {len(messages)} messages | "
+                    f"Total: {len(all_messages)} messages, {total_images} images found"
+                )
 
                 # Check if we've reached the end (fewer than 100 messages returned)
                 if len(messages) < 100:
@@ -166,7 +168,9 @@ class DiscordImageDownloader:
                 if response.status_code == 401:
                     print("✗ Authentication failed. Please check your DISCORD_TOKEN.")
                 elif response.status_code == 403:
-                    print("✗ Access forbidden. You may not have permission to view this channel.")
+                    print(
+                        "✗ Access forbidden. You may not have permission to view this channel."
+                    )
                 elif response.status_code == 404:
                     print("✗ Channel not found. Please check the channel ID.")
                 else:
@@ -415,10 +419,12 @@ Examples:
 
     # Confirmation prompt for --all flag
     if args.all:
-        print("⚠ Warning: This will fetch ALL messages from the channel, which may take a while")
+        print(
+            "⚠ Warning: This will fetch ALL messages from the channel, which may take a while"
+        )
         print("  and could be thousands of messages.")
         response = input("\nDo you want to proceed? (y/n): ").strip().lower()
-        if response not in ['y', 'yes']:
+        if response not in ["y", "yes"]:
             print("\nDownload cancelled.")
             sys.exit(0)
         print()  # Empty line for spacing
@@ -449,7 +455,7 @@ Examples:
     print("=" * 50)
 
     downloader = DiscordImageDownloader(discord_token)
-    
+
     if args.all:
         # Use pagination to fetch all messages
         downloader.download_all_images_from_channel(args.channel_id)
