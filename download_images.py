@@ -5,6 +5,7 @@ Downloads all images from Discord channel messages using the Discord API.
 
 import os
 import sys
+import time
 import argparse
 import requests
 from pathlib import Path
@@ -101,6 +102,82 @@ class DiscordImageDownloader:
         except requests.exceptions.RequestException as e:
             print(f"✗ Error fetching messages: {e}")
             raise
+
+    def fetch_all_messages(self, channel_id: str) -> list:
+        """
+        Fetch ALL messages from a Discord channel using pagination.
+
+        Args:
+            channel_id: The Discord channel ID to fetch messages from
+
+        Returns:
+            List of all message objects
+
+        Raises:
+            requests.exceptions.RequestException: If the API request fails
+        """
+        all_messages = []
+        before_id = None
+        batch_count = 0
+        total_images = 0
+
+        print(f"Starting to fetch all messages from channel {channel_id}...")
+        print("This may take a while depending on channel size.\n")
+
+        while True:
+            batch_count += 1
+            
+            # Fetch batch of messages
+            try:
+                url = f"{self.base_url}/channels/{channel_id}/messages"
+                params = {"limit": 100}
+                if before_id:
+                    params["before"] = before_id
+
+                response = requests.get(url, headers=self.headers, params=params)
+                response.raise_for_status()
+                messages = response.json()
+
+                if not messages:
+                    # No more messages to fetch
+                    break
+
+                all_messages.extend(messages)
+                
+                # Count images in this batch for progress update
+                batch_images = self.get_image_attachments(messages)
+                total_images += len(batch_images)
+                
+                print(f"Batch {batch_count}: Retrieved {len(messages)} messages | "
+                      f"Total: {len(all_messages)} messages, {total_images} images found")
+
+                # Check if we've reached the end (fewer than 100 messages returned)
+                if len(messages) < 100:
+                    print("\n✓ Reached the end of channel history")
+                    break
+
+                # Get the oldest message ID for next iteration
+                before_id = messages[-1]["id"]
+
+                # Rate limiting - sleep between requests
+                time.sleep(0.75)
+
+            except requests.exceptions.HTTPError as e:
+                if response.status_code == 401:
+                    print("✗ Authentication failed. Please check your DISCORD_TOKEN.")
+                elif response.status_code == 403:
+                    print("✗ Access forbidden. You may not have permission to view this channel.")
+                elif response.status_code == 404:
+                    print("✗ Channel not found. Please check the channel ID.")
+                else:
+                    print(f"✗ HTTP error occurred: {e}")
+                raise
+
+            except requests.exceptions.RequestException as e:
+                print(f"✗ Error fetching messages: {e}")
+                raise
+
+        return all_messages
 
     def get_image_attachments(self, messages: list) -> list:
         """
@@ -213,6 +290,55 @@ class DiscordImageDownloader:
         print(f"  Successfully downloaded: {success_count}/{len(images)} images")
         print(f"  Location: {self.downloads_dir.absolute()}")
 
+    def download_all_images_from_channel(self, channel_id: str):
+        """
+        Download all images from a channel using pagination.
+
+        Args:
+            channel_id: Discord channel ID
+        """
+        # Create downloads directory
+        self.create_downloads_directory()
+
+        # Fetch all messages with pagination
+        try:
+            all_messages = self.fetch_all_messages(channel_id)
+        except requests.exceptions.RequestException:
+            print("\n✗ Failed to fetch messages. Exiting.")
+            return
+
+        if not all_messages:
+            print("\n✓ No messages found in the channel.")
+            return
+
+        # Extract all image attachments
+        print(f"\n✓ Fetched {len(all_messages)} total messages")
+        images = self.get_image_attachments(all_messages)
+
+        if not images:
+            print("✓ No images found in the channel.")
+            return
+
+        print(f"\nFound {len(images)} image(s) to download...")
+        print("-" * 50)
+
+        # Download all images
+        success_count = 0
+        for idx, (url, filename, message_id) in enumerate(images, 1):
+            print(f"[{idx}/{len(images)}] Downloading {filename}...", end=" ")
+
+            if self.download_image(url, filename):
+                print("✓")
+                success_count += 1
+            else:
+                print("✗")
+
+        # Summary
+        print("-" * 50)
+        print(f"\n✓ Download complete!")
+        print(f"  Successfully downloaded: {success_count}/{len(images)} images")
+        print(f"  Location: {self.downloads_dir.absolute()}")
+
 
 def main():
     """Main entry point for the script."""
@@ -227,6 +353,7 @@ Examples:
   python download_images.py 123456789012345678 --before 987654321098765432
   python download_images.py 123456789012345678 --after 111222333444555666
   python download_images.py 123456789012345678 --around 555666777888999000 --limit 50
+  python download_images.py 123456789012345678 --all
         """,
     )
 
@@ -263,6 +390,12 @@ Examples:
         help="Get messages around this message ID (gets context before and after)",
     )
 
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Download images from ALL messages in the channel (uses pagination, ignores --limit)",
+    )
+
     args = parser.parse_args()
 
     # Validate mutual exclusivity of before/after/around parameters
@@ -273,6 +406,22 @@ Examples:
         print("✗ Error: --before, --after, and --around are mutually exclusive")
         print("  Please use only one of these parameters at a time.")
         sys.exit(1)
+
+    # Validate --all flag compatibility
+    if args.all and len(query_params_set) > 0:
+        print("✗ Error: --all cannot be used with --before, --after, or --around")
+        print("  The --all flag fetches all messages automatically using pagination.")
+        sys.exit(1)
+
+    # Confirmation prompt for --all flag
+    if args.all:
+        print("⚠ Warning: This will fetch ALL messages from the channel, which may take a while")
+        print("  and could be thousands of messages.")
+        response = input("\nDo you want to proceed? (y/n): ").strip().lower()
+        if response not in ['y', 'yes']:
+            print("\nDownload cancelled.")
+            sys.exit(0)
+        print()  # Empty line for spacing
 
     # Load environment variables
     load_dotenv()
@@ -300,9 +449,15 @@ Examples:
     print("=" * 50)
 
     downloader = DiscordImageDownloader(discord_token)
-    downloader.download_images_from_channel(
-        args.channel_id, args.limit, args.before, args.after, args.around
-    )
+    
+    if args.all:
+        # Use pagination to fetch all messages
+        downloader.download_all_images_from_channel(args.channel_id)
+    else:
+        # Use standard single-batch fetch
+        downloader.download_images_from_channel(
+            args.channel_id, args.limit, args.before, args.after, args.around
+        )
 
 
 if __name__ == "__main__":
